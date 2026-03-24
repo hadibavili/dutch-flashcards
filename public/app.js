@@ -226,9 +226,12 @@ function showCard() {
 }
 
 function flipCard() {
-  if (flashcard.classList.contains('flipped')) return;
-  flashcard.classList.add('flipped');
-  ratingButtons.classList.remove('hidden');
+  const isFlipped = flashcard.classList.toggle('flipped');
+  if (isFlipped) {
+    ratingButtons.classList.remove('hidden');
+  } else {
+    ratingButtons.classList.add('hidden');
+  }
 }
 
 async function rateCard(rating) {
