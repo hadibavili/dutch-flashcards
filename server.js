@@ -50,7 +50,7 @@ app.get('/api/cards/due', async (req, res) => {
       FROM cards ca
       JOIN categories cat ON cat.id = ca.category_id
       JOIN progress p ON p.card_id = ca.id
-      WHERE p.next_review <= NOW()
+      WHERE p.next_review <= NOW() AND p.mastered = false
     `;
     const params = [];
 
@@ -84,12 +84,13 @@ app.get('/api/cards', async (req, res) => {
       FROM cards ca
       JOIN categories cat ON cat.id = ca.category_id
       JOIN progress p ON p.card_id = ca.id
+      WHERE p.mastered = false
     `;
     const params = [];
 
     if (categoryId) {
       params.push(categoryId);
-      query += ` WHERE ca.category_id = $${params.length}`;
+      query += ` AND ca.category_id = $${params.length}`;
     }
 
     query += ' ORDER BY ca.id';
@@ -175,6 +176,21 @@ app.post('/api/cards/:id/review', async (req, res) => {
   }
 });
 
+// Mark a card as mastered (never show again)
+app.post('/api/cards/:id/master', async (req, res) => {
+  try {
+    const cardId = parseInt(req.params.id);
+    await pool.query(
+      'UPDATE progress SET mastered = true WHERE card_id = $1',
+      [cardId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // Get overall stats
 app.get('/api/stats', async (req, res) => {
   try {
@@ -182,7 +198,8 @@ app.get('/api/stats', async (req, res) => {
       SELECT
         COUNT(*) as total_cards,
         COUNT(CASE WHEN repetitions > 0 THEN 1 END) as learned,
-        COUNT(CASE WHEN next_review <= NOW() THEN 1 END) as due_now,
+        COUNT(CASE WHEN next_review <= NOW() AND mastered = false THEN 1 END) as due_now,
+        COUNT(CASE WHEN mastered = true THEN 1 END) as mastered,
         COALESCE(SUM(times_correct), 0) as total_correct,
         COALESCE(SUM(times_wrong), 0) as total_wrong
       FROM progress

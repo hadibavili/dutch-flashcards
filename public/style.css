@@ -307,6 +307,34 @@ h2 {
   margin-bottom: 4px;
 }
 
+/* Know button */
+.btn-known {
+  background: rgba(46, 204, 113, 0.1);
+  border: 1px solid rgba(46, 204, 113, 0.3);
+  color: var(--success);
+  padding: 8px 16px;
+  border-radius: 50px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+  position: absolute;
+  bottom: 52px;
+}
+
+.btn-known:hover {
+  background: var(--success);
+  color: white;
+  border-color: var(--success);
+}
+
+.btn-known:active {
+  transform: scale(0.95);
+}
+
 /* Speak button */
 .btn-speak {
   background: rgba(255,255,255,0.08);

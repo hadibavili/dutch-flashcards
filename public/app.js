@@ -301,9 +301,30 @@ async function addCard(e) {
 
 // --- Event Listeners ---
 flashcard.addEventListener('click', (e) => {
-  // Don't flip when tapping the speak button
-  if (e.target.closest('.btn-speak')) return;
+  // Don't flip when tapping the speak or know button
+  if (e.target.closest('.btn-speak') || e.target.closest('.btn-known')) return;
   flipCard();
+});
+
+document.getElementById('btn-known').addEventListener('click', async (e) => {
+  e.stopPropagation();
+  const card = cards[currentIndex];
+  if (!card) return;
+
+  // Mark as mastered in DB
+  api(`/cards/${card.id}/master`, { method: 'POST' });
+
+  // Remove from current session and show next
+  cards.splice(currentIndex, 1);
+  if (currentIndex >= cards.length) currentIndex = Math.max(0, cards.length - 1);
+
+  showToast('Marked as known!');
+
+  if (cards.length === 0) {
+    finishSession();
+  } else {
+    showCard();
+  }
 });
 
 document.getElementById('btn-speak-front').addEventListener('click', (e) => {

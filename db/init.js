@@ -35,7 +35,8 @@ async function init() {
         next_review TIMESTAMP DEFAULT NOW(),
         last_reviewed TIMESTAMP,
         times_correct INTEGER DEFAULT 0,
-        times_wrong INTEGER DEFAULT 0
+        times_wrong INTEGER DEFAULT 0,
+        mastered BOOLEAN DEFAULT false
       );
     `);
     console.log('Database tables created successfully!');
