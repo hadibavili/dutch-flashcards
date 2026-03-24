@@ -6,6 +6,38 @@ let sessionWrong = 0;
 let studyMode = 'due'; // 'due' or 'all'
 let selectedCategory = null;
 
+// --- Speech ---
+function speak(text, lang) {
+  if (!('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = lang;
+  utterance.rate = 0.85; // slightly slower for learning
+
+  // Try to find a matching voice
+  const voices = window.speechSynthesis.getVoices();
+  const match = voices.find(v => v.lang.startsWith(lang.split('-')[0]));
+  if (match) utterance.voice = match;
+
+  // Animate button
+  const btn = lang === 'nl-NL'
+    ? document.getElementById('btn-speak-front')
+    : document.getElementById('btn-speak-back');
+
+  if (btn) btn.classList.add('speaking');
+  utterance.onend = () => { if (btn) btn.classList.remove('speaking'); };
+  utterance.onerror = () => { if (btn) btn.classList.remove('speaking'); };
+
+  window.speechSynthesis.speak(utterance);
+}
+
+// Preload voices (needed on some browsers)
+if ('speechSynthesis' in window) {
+  window.speechSynthesis.getVoices();
+  window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+}
+
 // --- DOM Elements ---
 const screens = {
   home: document.getElementById('home-screen'),
@@ -228,7 +260,23 @@ async function addCard(e) {
 }
 
 // --- Event Listeners ---
-flashcard.addEventListener('click', flipCard);
+flashcard.addEventListener('click', (e) => {
+  // Don't flip when tapping the speak button
+  if (e.target.closest('.btn-speak')) return;
+  flipCard();
+});
+
+document.getElementById('btn-speak-front').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const card = cards[currentIndex];
+  if (card) speak(card.dutch, 'nl-NL');
+});
+
+document.getElementById('btn-speak-back').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const card = cards[currentIndex];
+  if (card) speak(card.english, 'en-US');
+});
 
 ratingButtons.querySelectorAll('.btn-rating').forEach(btn => {
   btn.addEventListener('click', () => rateCard(parseInt(btn.dataset.rating)));
