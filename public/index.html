@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1a1a2e">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icon-192.svg">
+  <link rel="icon" href="/icon-192.svg" type="image/svg+xml">
+  <title>Dutch Flashcards</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Home Screen -->
+    <div id="home-screen" class="screen active">
+      <header>
+        <h1>🇳🇱 Dutch Cards</h1>
+        <div id="home-stats" class="stats-bar"></div>
+      </header>
+
+      <div class="action-buttons">
+        <button id="btn-study" class="btn btn-primary btn-large">
+          Study Due Cards
+          <span id="due-badge" class="badge"></span>
+        </button>
+        <button id="btn-study-all" class="btn btn-secondary">Study All Cards</button>
+      </div>
+
+      <h2>Categories</h2>
+      <div id="category-list" class="category-grid"></div>
+
+      <button id="btn-add" class="btn btn-outline">+ Add New Card</button>
+    </div>
+
+    <!-- Study Screen -->
+    <div id="study-screen" class="screen">
+      <header>
+        <button id="btn-back" class="btn-icon">&larr;</button>
+        <span id="study-progress">0 / 0</span>
+        <span id="study-category"></span>
+      </header>
+
+      <div id="card-container">
+        <div id="flashcard" class="card">
+          <div class="card-inner">
+            <div class="card-front">
+              <span class="card-label">Dutch</span>
+              <span class="card-word" id="card-front-word"></span>
+              <span class="card-hint">Tap to flip</span>
+            </div>
+            <div class="card-back">
+              <span class="card-label">English</span>
+              <span class="card-word" id="card-back-word"></span>
+              <div class="card-example" id="card-example"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="rating-buttons" class="rating-buttons hidden">
+        <button class="btn btn-rating btn-wrong" data-rating="0">
+          Wrong
+        </button>
+        <button class="btn btn-rating btn-hard" data-rating="1">
+          Hard
+        </button>
+        <button class="btn btn-rating btn-good" data-rating="2">
+          Good
+        </button>
+        <button class="btn btn-rating btn-easy" data-rating="3">
+          Easy
+        </button>
+      </div>
+
+      <div id="empty-state" class="empty-state hidden">
+        <p>No cards due for review!</p>
+        <p>Come back later or study all cards.</p>
+        <button id="btn-back-empty" class="btn btn-primary">Back to Home</button>
+      </div>
+
+      <div id="complete-state" class="empty-state hidden">
+        <h2>Session Complete!</h2>
+        <div id="session-stats"></div>
+        <button id="btn-back-complete" class="btn btn-primary">Back to Home</button>
+      </div>
+    </div>
+
+    <!-- Add Card Screen -->
+    <div id="add-screen" class="screen">
+      <header>
+        <button id="btn-back-add" class="btn-icon">&larr;</button>
+        <span>Add New Card</span>
+      </header>
+
+      <form id="add-form" class="add-form">
+        <label>
+          Dutch word / phrase
+          <input type="text" id="input-dutch" required placeholder="e.g. Huis">
+        </label>
+        <label>
+          English translation
+          <input type="text" id="input-english" required placeholder="e.g. House">
+        </label>
+        <label>
+          Category
+          <select id="input-category"></select>
+        </label>
+        <label>
+          Example sentence (Dutch)
+          <input type="text" id="input-example-nl" placeholder="e.g. Ons huis is groot.">
+        </label>
+        <label>
+          Example sentence (English)
+          <input type="text" id="input-example-en" placeholder="e.g. Our house is big.">
+        </label>
+        <button type="submit" class="btn btn-primary">Add Card</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
