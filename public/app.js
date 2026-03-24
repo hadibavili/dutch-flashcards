@@ -7,18 +7,56 @@ let studyMode = 'due'; // 'due' or 'all'
 let selectedCategory = null;
 
 // --- Speech ---
-function speak(text, lang) {
+let cachedVoices = [];
+
+function loadVoices() {
+  return new Promise((resolve) => {
+    cachedVoices = window.speechSynthesis.getVoices();
+    if (cachedVoices.length > 0) {
+      resolve(cachedVoices);
+    } else {
+      window.speechSynthesis.onvoiceschanged = () => {
+        cachedVoices = window.speechSynthesis.getVoices();
+        resolve(cachedVoices);
+      };
+    }
+  });
+}
+
+function findVoice(lang) {
+  const langPrefix = lang.split('-')[0]; // 'nl' or 'en'
+
+  // Exact match first (e.g. nl-NL)
+  let voice = cachedVoices.find(v => v.lang === lang);
+  if (voice) return voice;
+
+  // Prefix match (e.g. nl)
+  voice = cachedVoices.find(v => v.lang.startsWith(langPrefix + '-'));
+  if (voice) return voice;
+
+  // Loose match (e.g. lang contains 'nl')
+  voice = cachedVoices.find(v => v.lang.toLowerCase().startsWith(langPrefix));
+  return voice || null;
+}
+
+async function speak(text, lang) {
   if (!('speechSynthesis' in window)) return;
   window.speechSynthesis.cancel();
 
+  // Ensure voices are loaded before speaking
+  if (cachedVoices.length === 0) {
+    await loadVoices();
+  }
+
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = lang;
-  utterance.rate = 0.85; // slightly slower for learning
+  utterance.rate = 0.85;
 
-  // Try to find a matching voice
-  const voices = window.speechSynthesis.getVoices();
-  const match = voices.find(v => v.lang.startsWith(lang.split('-')[0]));
-  if (match) utterance.voice = match;
+  // Explicitly set voice — this is the key to correct pronunciation
+  const voice = findVoice(lang);
+  if (voice) {
+    utterance.voice = voice;
+  }
 
   // Animate button
   const btn = lang === 'nl-NL'
@@ -32,10 +70,9 @@ function speak(text, lang) {
   window.speechSynthesis.speak(utterance);
 }
 
-// Preload voices (needed on some browsers)
+// Preload voices as early as possible
 if ('speechSynthesis' in window) {
-  window.speechSynthesis.getVoices();
-  window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+  loadVoices();
 }
 
 // --- DOM Elements ---
