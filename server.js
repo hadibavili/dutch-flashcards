@@ -221,8 +221,8 @@ app.post('/api/cards', async (req, res) => {
   }
 });
 
-// SPA fallback
-app.get('*', (req, res) => {
+// SPA fallback (Express 5 syntax)
+app.get('/{*splat}', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
