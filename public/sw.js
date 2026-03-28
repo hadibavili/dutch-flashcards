@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dutch-cards-v2';
+const CACHE_NAME = 'flashcards-v3';
 const STATIC_ASSETS = [
   '/',
   '/index.html',

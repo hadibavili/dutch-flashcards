@@ -12,8 +12,10 @@ async function init() {
     await client.query(`
       CREATE TABLE IF NOT EXISTS categories (
         id SERIAL PRIMARY KEY,
-        name VARCHAR(100) NOT NULL UNIQUE,
-        emoji VARCHAR(10) DEFAULT '📚'
+        profile_id VARCHAR(20) NOT NULL DEFAULT 'dutch',
+        name VARCHAR(100) NOT NULL,
+        emoji VARCHAR(10) DEFAULT '📚',
+        UNIQUE(profile_id, name)
       );
 
       CREATE TABLE IF NOT EXISTS cards (
@@ -23,6 +25,7 @@ async function init() {
         english VARCHAR(500) NOT NULL,
         example_nl VARCHAR(500),
         example_en VARCHAR(500),
+        farsi_script VARCHAR(500),
         created_at TIMESTAMP DEFAULT NOW()
       );
 

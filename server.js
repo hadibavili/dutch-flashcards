@@ -19,6 +19,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Get all categories with card counts
 app.get('/api/categories', async (req, res) => {
   try {
+    const profile = req.query.profile || 'dutch';
     const result = await pool.query(`
       SELECT c.id, c.name, c.emoji,
         COUNT(ca.id) as total_cards,
@@ -26,9 +27,10 @@ app.get('/api/categories', async (req, res) => {
       FROM categories c
       LEFT JOIN cards ca ON ca.category_id = c.id
       LEFT JOIN progress p ON p.card_id = ca.id
+      WHERE c.profile_id = $1
       GROUP BY c.id, c.name, c.emoji
       ORDER BY c.id
-    `);
+    `, [profile]);
     res.json(result.rows);
   } catch (err) {
     console.error(err);
@@ -39,20 +41,21 @@ app.get('/api/categories', async (req, res) => {
 // Get due cards (cards ready for review)
 app.get('/api/cards/due', async (req, res) => {
   try {
+    const profile = req.query.profile || 'dutch';
     const categoryId = req.query.category;
     const limit = parseInt(req.query.limit) || 20;
 
     let query = `
-      SELECT ca.id, ca.dutch, ca.english, ca.example_nl, ca.example_en,
+      SELECT ca.id, ca.dutch, ca.english, ca.example_nl, ca.example_en, ca.farsi_script,
         cat.name as category, cat.emoji,
         p.repetitions, p.ease_factor, p.interval_days, p.next_review,
         p.times_correct, p.times_wrong
       FROM cards ca
       JOIN categories cat ON cat.id = ca.category_id
       JOIN progress p ON p.card_id = ca.id
-      WHERE p.next_review <= NOW() AND p.mastered = false
+      WHERE p.next_review <= NOW() AND p.mastered = false AND cat.profile_id = $1
     `;
-    const params = [];
+    const params = [profile];
 
     if (categoryId) {
       params.push(categoryId);
@@ -74,19 +77,20 @@ app.get('/api/cards/due', async (req, res) => {
 // Get all cards (for browse mode)
 app.get('/api/cards', async (req, res) => {
   try {
+    const profile = req.query.profile || 'dutch';
     const categoryId = req.query.category;
 
     let query = `
-      SELECT ca.id, ca.dutch, ca.english, ca.example_nl, ca.example_en,
+      SELECT ca.id, ca.dutch, ca.english, ca.example_nl, ca.example_en, ca.farsi_script,
         cat.name as category, cat.emoji,
         p.repetitions, p.ease_factor, p.interval_days, p.next_review,
         p.times_correct, p.times_wrong
       FROM cards ca
       JOIN categories cat ON cat.id = ca.category_id
       JOIN progress p ON p.card_id = ca.id
-      WHERE p.mastered = false
+      WHERE p.mastered = false AND cat.profile_id = $1
     `;
-    const params = [];
+    const params = [profile];
 
     if (categoryId) {
       params.push(categoryId);
@@ -194,16 +198,20 @@ app.post('/api/cards/:id/master', async (req, res) => {
 // Get overall stats
 app.get('/api/stats', async (req, res) => {
   try {
+    const profile = req.query.profile || 'dutch';
     const result = await pool.query(`
       SELECT
         COUNT(*) as total_cards,
-        COUNT(CASE WHEN repetitions > 0 THEN 1 END) as learned,
-        COUNT(CASE WHEN next_review <= NOW() AND mastered = false THEN 1 END) as due_now,
-        COUNT(CASE WHEN mastered = true THEN 1 END) as mastered,
-        COALESCE(SUM(times_correct), 0) as total_correct,
-        COALESCE(SUM(times_wrong), 0) as total_wrong
-      FROM progress
-    `);
+        COUNT(CASE WHEN p.repetitions > 0 THEN 1 END) as learned,
+        COUNT(CASE WHEN p.next_review <= NOW() AND p.mastered = false THEN 1 END) as due_now,
+        COUNT(CASE WHEN p.mastered = true THEN 1 END) as mastered,
+        COALESCE(SUM(p.times_correct), 0) as total_correct,
+        COALESCE(SUM(p.times_wrong), 0) as total_wrong
+      FROM progress p
+      JOIN cards ca ON ca.id = p.card_id
+      JOIN categories cat ON cat.id = ca.category_id
+      WHERE cat.profile_id = $1
+    `, [profile]);
     res.json(result.rows[0]);
   } catch (err) {
     console.error(err);
@@ -214,16 +222,16 @@ app.get('/api/stats', async (req, res) => {
 // Add a new card
 app.post('/api/cards', async (req, res) => {
   try {
-    const { dutch, english, category_id, example_nl, example_en } = req.body;
+    const { dutch, english, category_id, example_nl, example_en, farsi_script } = req.body;
 
     if (!dutch || !english || !category_id) {
       return res.status(400).json({ error: 'dutch, english, and category_id are required' });
     }
 
     const cardResult = await pool.query(
-      `INSERT INTO cards (dutch, english, category_id, example_nl, example_en)
-       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-      [dutch, english, category_id, example_nl || null, example_en || null]
+      `INSERT INTO cards (dutch, english, category_id, example_nl, example_en, farsi_script)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+      [dutch, english, category_id, example_nl || null, example_en || null, farsi_script || null]
     );
 
     await pool.query(
@@ -244,5 +252,5 @@ app.get('/{*splat}', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Dutch Flashcard app running on http://localhost:${PORT}`);
+  console.log(`Flashcard app running on http://localhost:${PORT}`);
 });

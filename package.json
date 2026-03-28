@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node server.js",
     "db:init": "node db/init.js",
-    "db:seed": "node db/seed.js"
+    "db:seed": "node db/seed.js",
+    "db:migrate": "node db/migrate-profiles.js",
+    "db:seed-persian": "node db/seed-persian.js"
   },
   "keywords": [],
   "author": "",

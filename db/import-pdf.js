@@ -297,9 +297,9 @@ async function importCards() {
     const catIdMap = {};
     for (const [key, cat] of Object.entries(chapterCategories)) {
       const res = await client.query(
-        `INSERT INTO categories (name, emoji)
-         VALUES ($1, $2)
-         ON CONFLICT (name) DO UPDATE SET emoji = $2
+        `INSERT INTO categories (profile_id, name, emoji)
+         VALUES ('dutch', $1, $2)
+         ON CONFLICT (profile_id, name) DO UPDATE SET emoji = $2
          RETURNING id`,
         [cat.name, cat.emoji]
       );

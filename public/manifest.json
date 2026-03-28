@@ -1,7 +1,7 @@
 {
-  "name": "Dutch Flashcards",
-  "short_name": "Dutch Cards",
-  "description": "Learn Dutch with spaced repetition flashcards",
+  "name": "Flashcards",
+  "short_name": "Flashcards",
+  "description": "Learn Dutch and Persian with spaced repetition flashcards",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f0f1a",

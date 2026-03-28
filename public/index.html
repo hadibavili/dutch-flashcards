@@ -9,15 +9,35 @@
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/icon-192.svg">
   <link rel="icon" href="/icon-192.svg" type="image/svg+xml">
-  <title>Dutch Flashcards</title>
+  <title>Flashcards</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <div id="app">
+    <!-- Profile Selection Screen -->
+    <div id="profile-screen" class="screen active">
+      <div class="profile-select">
+        <h1>Welcome!</h1>
+        <p>Choose your profile</p>
+        <div class="profile-cards">
+          <button class="profile-card" data-profile="dutch">
+            <span class="profile-emoji">&#x1F1F3;&#x1F1F1;</span>
+            <span class="profile-name">Hadi</span>
+            <span class="profile-lang">Dutch &rarr; English</span>
+          </button>
+          <button class="profile-card" data-profile="persian">
+            <span class="profile-emoji">&#x1F1EE;&#x1F1F7;</span>
+            <span class="profile-name">Nadine</span>
+            <span class="profile-lang">Persian &rarr; English</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Home Screen -->
-    <div id="home-screen" class="screen active">
+    <div id="home-screen" class="screen">
       <header>
-        <h1>🇳🇱 Dutch Cards</h1>
+        <h1 id="home-title"></h1>
         <div id="home-stats" class="stats-bar"></div>
       </header>
 
@@ -32,7 +52,10 @@
       <h2>Categories</h2>
       <div id="category-list" class="category-grid"></div>
 
-      <button id="btn-add" class="btn btn-outline">+ Add New Card</button>
+      <div class="home-footer">
+        <button id="btn-add" class="btn btn-outline">+ Add New Card</button>
+        <button id="btn-switch-profile" class="btn btn-outline">Switch Profile</button>
+      </div>
     </div>
 
     <!-- Study Screen -->
@@ -47,7 +70,7 @@
         <div id="flashcard" class="card">
           <div class="card-inner">
             <div class="card-front">
-              <span class="card-label">Dutch</span>
+              <span class="card-label" id="front-label">Dutch</span>
               <span class="card-word" id="card-front-word"></span>
               <button class="btn-speak" id="btn-speak-front" title="Listen">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
@@ -59,7 +82,7 @@
               <span class="card-hint">Tap to flip</span>
             </div>
             <div class="card-back">
-              <span class="card-label">English</span>
+              <span class="card-label" id="back-label">English</span>
               <span class="card-word" id="card-back-word"></span>
               <button class="btn-speak" id="btn-speak-back" title="Listen">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
@@ -108,11 +131,11 @@
 
       <form id="add-form" class="add-form">
         <label>
-          Dutch word / phrase
+          <span id="label-front-word">Dutch word / phrase</span>
           <input type="text" id="input-dutch" required placeholder="e.g. Huis">
         </label>
         <label>
-          English translation
+          <span id="label-back-word">English translation</span>
           <input type="text" id="input-english" required placeholder="e.g. House">
         </label>
         <label>
@@ -120,11 +143,11 @@
           <select id="input-category"></select>
         </label>
         <label>
-          Example sentence (Dutch)
+          <span id="label-example-front">Example sentence (Dutch)</span>
           <input type="text" id="input-example-nl" placeholder="e.g. Ons huis is groot.">
         </label>
         <label>
-          Example sentence (English)
+          <span id="label-example-back">Example sentence (English)</span>
           <input type="text" id="input-example-en" placeholder="e.g. Our house is big.">
         </label>
         <button type="submit" class="btn btn-primary">Add Card</button>

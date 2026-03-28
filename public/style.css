@@ -482,6 +482,79 @@ h2 {
   to { opacity: 0; }
 }
 
+/* Profile Selection */
+.profile-select {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  gap: 16px;
+  text-align: center;
+}
+
+.profile-select h1 {
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.profile-select p {
+  color: var(--text-dim);
+  font-size: 1rem;
+}
+
+.profile-cards {
+  display: flex;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.profile-card {
+  background: var(--surface);
+  border: 2px solid transparent;
+  border-radius: var(--radius);
+  padding: 32px 24px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: var(--text);
+  min-width: 140px;
+}
+
+.profile-card:hover,
+.profile-card.last-used {
+  border-color: var(--primary);
+  transform: translateY(-2px);
+}
+
+.profile-card.last-used {
+  box-shadow: 0 0 20px rgba(233, 69, 96, 0.2);
+}
+
+.profile-emoji {
+  font-size: 3rem;
+}
+
+.profile-name {
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.profile-lang {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+/* Home footer */
+.home-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 /* Utilities */
 .hidden { display: none !important; }
 

@@ -1,4 +1,35 @@
+// --- Profile Config ---
+const PROFILES = {
+  dutch: {
+    id: 'dutch',
+    name: 'Hadi',
+    title: '\u{1F1F3}\u{1F1F1} Dutch Cards',
+    frontLabel: 'Dutch',
+    backLabel: 'English',
+    frontLang: 'nl-NL',
+    backLang: 'en-US',
+    addFrontLabel: 'Dutch word / phrase',
+    addFrontPlaceholder: 'e.g. Huis',
+    addExampleFrontLabel: 'Example sentence (Dutch)',
+    addExampleFrontPlaceholder: 'e.g. Ons huis is groot.',
+  },
+  persian: {
+    id: 'persian',
+    name: 'Nadine',
+    title: '\u{1F1EE}\u{1F1F7} Persian Cards',
+    frontLabel: 'Fenglish',
+    backLabel: 'English',
+    frontLang: 'fa-IR',
+    backLang: 'en-US',
+    addFrontLabel: 'Fenglish (Persian in English letters)',
+    addFrontPlaceholder: 'e.g. salam',
+    addExampleFrontLabel: 'Example sentence (Fenglish)',
+    addExampleFrontPlaceholder: 'e.g. Salam, chetori?',
+  },
+};
+
 // --- State ---
+let currentProfile = null;
 let cards = [];
 let currentIndex = 0;
 let sessionCorrect = 0;
@@ -24,7 +55,7 @@ function loadVoices() {
 }
 
 function findVoice(lang) {
-  const langPrefix = lang.split('-')[0]; // 'nl' or 'en'
+  const langPrefix = lang.split('-')[0]; // 'nl', 'en', 'fa'
 
   // Exact match first (e.g. nl-NL)
   let voice = cachedVoices.find(v => v.lang === lang);
@@ -52,14 +83,15 @@ async function speak(text, lang) {
   utterance.lang = lang;
   utterance.rate = 0.85;
 
-  // Explicitly set voice — this is the key to correct pronunciation
+  // Explicitly set voice
   const voice = findVoice(lang);
   if (voice) {
     utterance.voice = voice;
   }
 
   // Animate button
-  const btn = lang === 'nl-NL'
+  const isFront = lang !== 'en-US';
+  const btn = isFront
     ? document.getElementById('btn-speak-front')
     : document.getElementById('btn-speak-back');
 
@@ -77,6 +109,7 @@ if ('speechSynthesis' in window) {
 
 // --- DOM Elements ---
 const screens = {
+  profile: document.getElementById('profile-screen'),
   home: document.getElementById('home-screen'),
   study: document.getElementById('study-screen'),
   add: document.getElementById('add-screen'),
@@ -99,6 +132,27 @@ function showScreen(name) {
   screens[name].classList.add('active');
 }
 
+// --- Profile ---
+function selectProfile(profileId) {
+  currentProfile = profileId;
+  localStorage.setItem('lastProfile', profileId);
+  applyProfile();
+  showScreen('home');
+  loadHome();
+}
+
+function applyProfile() {
+  const p = PROFILES[currentProfile];
+  document.getElementById('home-title').textContent = p.title;
+  document.getElementById('front-label').textContent = p.frontLabel;
+  document.getElementById('back-label').textContent = p.backLabel;
+  // Add card form
+  document.getElementById('label-front-word').textContent = p.addFrontLabel;
+  document.getElementById('input-dutch').placeholder = p.addFrontPlaceholder;
+  document.getElementById('label-example-front').textContent = p.addExampleFrontLabel;
+  document.getElementById('input-example-nl').placeholder = p.addExampleFrontPlaceholder;
+}
+
 // --- API Helpers ---
 async function api(path, options) {
   const res = await fetch(`/api${path}`, {
@@ -111,8 +165,8 @@ async function api(path, options) {
 // --- Home Screen ---
 async function loadHome() {
   const [categories, stats] = await Promise.all([
-    api('/categories'),
-    api('/stats'),
+    api(`/categories?profile=${currentProfile}`),
+    api(`/stats?profile=${currentProfile}`),
   ]);
 
   // Stats bar
@@ -170,6 +224,7 @@ async function startStudy(mode) {
   currentIndex = 0;
 
   const params = new URLSearchParams();
+  params.set('profile', currentProfile);
   if (selectedCategory) params.set('category', selectedCategory);
   if (mode === 'due') params.set('limit', '50');
 
@@ -330,7 +385,19 @@ document.getElementById('btn-known').addEventListener('click', async (e) => {
 document.getElementById('btn-speak-front').addEventListener('click', (e) => {
   e.stopPropagation();
   const card = cards[currentIndex];
-  if (card) speak(card.dutch, 'nl-NL');
+  if (!card) return;
+
+  const p = PROFILES[currentProfile];
+  if (currentProfile === 'persian') {
+    // Try Farsi TTS with actual script, fallback to Fenglish with English voice
+    if (card.farsi_script && findVoice('fa-IR')) {
+      speak(card.farsi_script, 'fa-IR');
+    } else {
+      speak(card.dutch, 'en-US');
+    }
+  } else {
+    speak(card.dutch, p.frontLang);
+  }
 });
 
 document.getElementById('btn-speak-back').addEventListener('click', (e) => {
@@ -360,6 +427,17 @@ document.getElementById('btn-add').addEventListener('click', () => showScreen('a
 document.getElementById('btn-back-add').addEventListener('click', goHome);
 document.getElementById('add-form').addEventListener('submit', addCard);
 
+document.getElementById('btn-switch-profile').addEventListener('click', () => {
+  showScreen('profile');
+});
+
+// Profile selection
+document.querySelectorAll('.profile-card').forEach(btn => {
+  btn.addEventListener('click', () => {
+    selectProfile(btn.dataset.profile);
+  });
+});
+
 // Keyboard shortcuts for study
 document.addEventListener('keydown', (e) => {
   if (!screens.study.classList.contains('active')) return;
@@ -380,4 +458,10 @@ if ('serviceWorker' in navigator) {
 }
 
 // --- Init ---
-loadHome();
+// Highlight last used profile
+const lastProfile = localStorage.getItem('lastProfile');
+if (lastProfile) {
+  const btn = document.querySelector(`.profile-card[data-profile="${lastProfile}"]`);
+  if (btn) btn.classList.add('last-used');
+}
+showScreen('profile');

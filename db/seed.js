@@ -103,13 +103,13 @@ async function seed() {
     // Insert categories
     for (const cat of categories) {
       await client.query(
-        'INSERT INTO categories (name, emoji) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING',
-        [cat.name, cat.emoji]
+        'INSERT INTO categories (profile_id, name, emoji) VALUES ($1, $2, $3) ON CONFLICT (profile_id, name) DO NOTHING',
+        ['dutch', cat.name, cat.emoji]
       );
     }
 
     // Get category IDs
-    const catRows = await client.query('SELECT id, name FROM categories');
+    const catRows = await client.query("SELECT id, name FROM categories WHERE profile_id = 'dutch'");
     const catMap = {};
     catRows.rows.forEach(r => { catMap[r.name] = r.id; });
 
