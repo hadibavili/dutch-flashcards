@@ -474,13 +474,24 @@ function urlBase64ToUint8Array(base64String) {
 
 async function initNotifications() {
   const btn = document.getElementById('btn-notifications');
+  btn.style.display = '';
 
-  if (!('Notification' in window) || !('PushManager' in window) || !('serviceWorker' in navigator)) {
-    btn.style.display = 'none';
+  const hasNotification = 'Notification' in window;
+  const hasPushManager = 'PushManager' in window;
+  const hasSW = 'serviceWorker' in navigator;
+  const isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+
+  if (!hasNotification || !hasPushManager || !hasSW) {
+    if (!isStandalone) {
+      btn.textContent = 'Add to Home Screen for notifications';
+    } else {
+      btn.textContent = 'Notifications not supported';
+    }
+    btn.disabled = true;
     return;
   }
 
-  btn.style.display = '';
+  btn.disabled = false;
 
   if (Notification.permission === 'denied') {
     btn.textContent = 'Notifications Blocked';
