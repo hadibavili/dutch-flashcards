@@ -2,6 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const { Pool } = require('pg');
+const webpush = require('web-push');
+const cron = require('node-cron');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -13,6 +15,15 @@ const pool = new Pool({
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+
+// --- Web Push Setup ---
+if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(
+    process.env.VAPID_SUBJECT || 'mailto:example@example.com',
+    process.env.VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY
+  );
+}
 
 // --- API Routes ---
 
@@ -243,6 +254,113 @@ app.post('/api/cards', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// --- Push Notification Endpoints ---
+
+app.get('/api/push/vapid-public-key', (req, res) => {
+  res.json({ publicKey: process.env.VAPID_PUBLIC_KEY || '' });
+});
+
+app.post('/api/push/subscribe', async (req, res) => {
+  try {
+    const { profile, subscription } = req.body;
+    if (!profile || !subscription?.endpoint || !subscription?.keys) {
+      return res.status(400).json({ error: 'profile and subscription required' });
+    }
+    await pool.query(`
+      INSERT INTO push_subscriptions (profile_id, endpoint, p256dh, auth)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (endpoint) DO UPDATE
+      SET profile_id = $1, p256dh = $3, auth = $4
+    `, [profile, subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.delete('/api/push/subscribe', async (req, res) => {
+  try {
+    const { endpoint } = req.body;
+    if (!endpoint) return res.status(400).json({ error: 'endpoint required' });
+    await pool.query('DELETE FROM push_subscriptions WHERE endpoint = $1', [endpoint]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// --- Daily Push Notification Cron (10 PM Amsterdam) ---
+async function sendDailyPush() {
+  console.log('[CRON] Sending daily push notifications...');
+  const profiles = ['dutch', 'persian'];
+  const profileNames = { dutch: 'Hadi', persian: 'Nadine' };
+
+  for (const profile of profiles) {
+    try {
+      const statsResult = await pool.query(`
+        SELECT COUNT(*) as due_now
+        FROM progress p
+        JOIN cards ca ON ca.id = p.card_id
+        JOIN categories cat ON cat.id = ca.category_id
+        WHERE p.next_review <= NOW() AND p.mastered = false AND cat.profile_id = $1
+      `, [profile]);
+      const dueCount = parseInt(statsResult.rows[0].due_now);
+
+      const subsResult = await pool.query(
+        'SELECT * FROM push_subscriptions WHERE profile_id = $1',
+        [profile]
+      );
+      if (subsResult.rows.length === 0) continue;
+
+      const name = profileNames[profile];
+      const body = dueCount > 0
+        ? `${name}, you have ${dueCount} card${dueCount !== 1 ? 's' : ''} due for review!`
+        : `${name}, great job! No cards due. Keep it up!`;
+
+      const payload = JSON.stringify({
+        title: 'Flashcards',
+        body,
+        icon: '/icon-192.svg',
+        data: { url: '/' },
+      });
+
+      for (const sub of subsResult.rows) {
+        try {
+          await webpush.sendNotification(
+            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+            payload
+          );
+        } catch (err) {
+          if (err.statusCode === 410 || err.statusCode === 404) {
+            await pool.query('DELETE FROM push_subscriptions WHERE endpoint = $1', [sub.endpoint]);
+            console.log(`[CRON] Removed expired subscription for ${profile}`);
+          } else {
+            console.error(`[CRON] Push error for ${profile}:`, err.message);
+          }
+        }
+      }
+    } catch (err) {
+      console.error(`[CRON] Error for ${profile}:`, err);
+    }
+  }
+  console.log('[CRON] Push notifications sent.');
+}
+
+cron.schedule('0 22 * * *', sendDailyPush, { timezone: 'Europe/Amsterdam' });
+
+// Test endpoint (send push now)
+app.post('/api/push/test', async (req, res) => {
+  try {
+    await sendDailyPush();
+    res.json({ sent: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to send' });
   }
 });
 

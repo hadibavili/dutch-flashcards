@@ -555,6 +555,12 @@ h2 {
   gap: 10px;
 }
 
+.btn-notif-active {
+  border-color: var(--primary);
+  color: var(--primary);
+  border-style: solid;
+}
+
 /* Utilities */
 .hidden { display: none !important; }
 

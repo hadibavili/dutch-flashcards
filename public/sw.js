@@ -1,4 +1,4 @@
-const CACHE_NAME = 'flashcards-v3';
+const CACHE_NAME = 'flashcards-v4';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -23,6 +23,36 @@ self.addEventListener('activate', event => {
     )
   );
   self.clients.claim();
+});
+
+// Push: show notification when push message arrives
+self.addEventListener('push', event => {
+  let data = { title: 'Flashcards', body: 'Time to practice!' };
+  if (event.data) {
+    try { data = event.data.json(); } catch (e) { data.body = event.data.text(); }
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: data.icon || '/icon-192.svg',
+      data: data.data || { url: '/' },
+    })
+  );
+});
+
+// Notification click: open or focus the app
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
+      for (const client of windowClients) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      return clients.openWindow(event.notification.data?.url || '/');
+    })
+  );
 });
 
 // Fetch: network-first for everything (always get latest, fall back to cache)

@@ -214,6 +214,9 @@ async function loadHome() {
   select.innerHTML = categories.map(c =>
     `<option value="${c.id}">${c.emoji} ${c.name}</option>`
   ).join('');
+
+  // Update notification button state
+  initNotifications();
 }
 
 // --- Study Session ---
@@ -456,6 +459,110 @@ document.addEventListener('keydown', (e) => {
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js');
 }
+
+// --- Push Notifications ---
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i++) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+async function initNotifications() {
+  const btn = document.getElementById('btn-notifications');
+
+  if (!('Notification' in window) || !('PushManager' in window) || !('serviceWorker' in navigator)) {
+    btn.style.display = 'none';
+    return;
+  }
+
+  btn.style.display = '';
+
+  if (Notification.permission === 'denied') {
+    btn.textContent = 'Notifications Blocked';
+    btn.disabled = true;
+    btn.classList.remove('btn-notif-active');
+    return;
+  }
+
+  if (Notification.permission === 'granted') {
+    const reg = await navigator.serviceWorker.ready;
+    const subscription = await reg.pushManager.getSubscription();
+    if (subscription) {
+      btn.textContent = 'Disable Notifications';
+      btn.classList.add('btn-notif-active');
+      return;
+    }
+  }
+
+  btn.textContent = 'Enable Notifications';
+  btn.disabled = false;
+  btn.classList.remove('btn-notif-active');
+}
+
+async function subscribePush() {
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      showToast('Notification permission denied');
+      initNotifications();
+      return;
+    }
+
+    const { publicKey } = await api('/push/vapid-public-key');
+    const vapidKey = urlBase64ToUint8Array(publicKey);
+
+    const reg = await navigator.serviceWorker.ready;
+    const subscription = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: vapidKey,
+    });
+
+    await api('/push/subscribe', {
+      method: 'POST',
+      body: JSON.stringify({ profile: currentProfile, subscription: subscription.toJSON() }),
+    });
+
+    showToast('Notifications enabled!');
+    initNotifications();
+  } catch (err) {
+    console.error('Push subscription failed:', err);
+    showToast('Could not enable notifications');
+  }
+}
+
+async function unsubscribePush() {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const subscription = await reg.pushManager.getSubscription();
+    if (subscription) {
+      await api('/push/subscribe', {
+        method: 'DELETE',
+        body: JSON.stringify({ endpoint: subscription.endpoint }),
+      });
+      await subscription.unsubscribe();
+      showToast('Notifications disabled');
+    }
+    initNotifications();
+  } catch (err) {
+    console.error('Unsubscribe failed:', err);
+    showToast('Could not disable notifications');
+  }
+}
+
+document.getElementById('btn-notifications').addEventListener('click', async () => {
+  const reg = await navigator.serviceWorker.ready;
+  const subscription = await reg.pushManager.getSubscription();
+  if (subscription) {
+    unsubscribePush();
+  } else {
+    subscribePush();
+  }
+});
 
 // --- Init ---
 // Highlight last used profile
