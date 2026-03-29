@@ -392,8 +392,9 @@ document.getElementById('btn-speak-front').addEventListener('click', (e) => {
 
   const p = PROFILES[currentProfile];
   if (currentProfile === 'persian') {
-    // Try Farsi TTS with actual script, fallback to Fenglish with English voice
-    if (card.farsi_script && findVoice('fa-IR')) {
+    // Speak Farsi script with fa-IR lang; browser uses best available voice
+    // Fallback to Fenglish with en-US only if no script available
+    if (card.farsi_script) {
       speak(card.farsi_script, 'fa-IR');
     } else {
       speak(card.dutch, 'en-US');
