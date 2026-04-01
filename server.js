@@ -4,6 +4,7 @@ const path = require('path');
 const { Pool } = require('pg');
 const webpush = require('web-push');
 const cron = require('node-cron');
+const { suggestCategory } = require('./category-suggest');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -43,6 +44,29 @@ app.get('/api/categories', async (req, res) => {
       ORDER BY c.id
     `, [profile]);
     res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Suggest a category based on English translation
+app.get('/api/categories/suggest', async (req, res) => {
+  try {
+    const profile = req.query.profile || 'dutch';
+    const english = req.query.english || '';
+
+    if (!english.trim()) {
+      return res.json({ suggestion: null });
+    }
+
+    const catResult = await pool.query(
+      'SELECT id, name, emoji FROM categories WHERE profile_id = $1 ORDER BY id',
+      [profile]
+    );
+
+    const suggestion = suggestCategory(english, profile, catResult.rows);
+    res.json({ suggestion });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });

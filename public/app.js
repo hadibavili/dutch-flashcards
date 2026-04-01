@@ -354,6 +354,7 @@ async function addCard(e) {
   });
 
   document.getElementById('add-form').reset();
+  document.getElementById('category-suggestion-hint').classList.add('hidden');
   showToast('Card added!');
 }
 
@@ -430,6 +431,29 @@ document.getElementById('btn-back-complete').addEventListener('click', goHome);
 document.getElementById('btn-add').addEventListener('click', () => showScreen('add'));
 document.getElementById('btn-back-add').addEventListener('click', goHome);
 document.getElementById('add-form').addEventListener('submit', addCard);
+
+// Auto-suggest category when English translation changes
+let suggestTimeout = null;
+document.getElementById('input-english').addEventListener('input', (e) => {
+  clearTimeout(suggestTimeout);
+  const english = e.target.value.trim();
+  if (english.length < 2) return;
+
+  suggestTimeout = setTimeout(async () => {
+    const result = await api(`/categories/suggest?profile=${currentProfile}&english=${encodeURIComponent(english)}`);
+    if (result.suggestion) {
+      const select = document.getElementById('input-category');
+      select.value = result.suggestion.id;
+      const hint = document.getElementById('category-suggestion-hint');
+      hint.textContent = `Auto-suggested: ${result.suggestion.emoji} ${result.suggestion.name}`;
+      hint.classList.remove('hidden');
+    }
+  }, 400);
+});
+
+document.getElementById('input-category').addEventListener('change', () => {
+  document.getElementById('category-suggestion-hint').classList.add('hidden');
+});
 
 document.getElementById('btn-switch-profile').addEventListener('click', () => {
   showScreen('profile');

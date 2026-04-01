@@ -561,6 +561,14 @@ h2 {
   border-style: solid;
 }
 
+.suggestion-hint {
+  font-size: 0.75rem;
+  color: var(--primary);
+  opacity: 0.85;
+  margin-top: 4px;
+  display: block;
+}
+
 /* Utilities */
 .hidden { display: none !important; }
 
