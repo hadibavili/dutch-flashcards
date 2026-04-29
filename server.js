@@ -14,6 +14,19 @@ const pool = new Pool({
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
+const persianTtsCache = new Map();
+const PERSIAN_TTS_VOICE = 'fa-IR-DilaraNeural';
+const MAX_TTS_TEXT_LENGTH = 500;
+const MAX_TTS_CACHE_ITEMS = 200;
+
+function cachePersianTts(text, audioBuffer) {
+  if (persianTtsCache.size >= MAX_TTS_CACHE_ITEMS) {
+    const oldestKey = persianTtsCache.keys().next().value;
+    persianTtsCache.delete(oldestKey);
+  }
+  persianTtsCache.set(text, audioBuffer);
+}
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -27,6 +40,67 @@ if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
 }
 
 // --- API Routes ---
+
+// Persian TTS proxy. Browsers often have no local fa-IR Web Speech voice.
+app.get('/api/tts/persian', async (req, res) => {
+  try {
+    const text = (req.query.text || '').trim();
+
+    if (!text) {
+      return res.status(400).json({ error: 'text is required' });
+    }
+
+    if (text.length > MAX_TTS_TEXT_LENGTH) {
+      return res.status(400).json({ error: 'text is too long' });
+    }
+
+    const cachedAudio = persianTtsCache.get(text);
+    if (cachedAudio) {
+      res.set('Content-Type', 'audio/mpeg');
+      res.set('Cache-Control', 'public, max-age=3600');
+      return res.send(cachedAudio);
+    }
+
+    const ttsResult = await fetch('https://freetts.org/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text,
+        voice: PERSIAN_TTS_VOICE,
+        rate: '-10%',
+        pitch: '+0Hz',
+      }),
+    });
+
+    if (!ttsResult.ok) {
+      const errorText = await ttsResult.text();
+      console.error('Persian TTS generation failed:', ttsResult.status, errorText);
+      return res.status(502).json({ error: 'TTS service failed' });
+    }
+
+    const { file_id } = await ttsResult.json();
+    if (!file_id) {
+      return res.status(502).json({ error: 'TTS service returned no audio id' });
+    }
+
+    const audioResult = await fetch(`https://freetts.org/api/audio/${encodeURIComponent(file_id)}`);
+    if (!audioResult.ok) {
+      const errorText = await audioResult.text();
+      console.error('Persian TTS audio download failed:', audioResult.status, errorText);
+      return res.status(502).json({ error: 'TTS audio download failed' });
+    }
+
+    const audioBuffer = Buffer.from(await audioResult.arrayBuffer());
+    cachePersianTts(text, audioBuffer);
+
+    res.set('Content-Type', 'audio/mpeg');
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.send(audioBuffer);
+  } catch (err) {
+    console.error('Persian TTS error:', err);
+    res.status(500).json({ error: 'TTS server error' });
+  }
+});
 
 // Get all categories with card counts
 app.get('/api/categories', async (req, res) => {

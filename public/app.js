@@ -41,6 +41,7 @@ let selectedCategory = null;
 let cachedVoices = [];
 let voicesPromise = null;
 let activeUtterance = null;
+let activeAudio = null;
 let pendingSpeechTimer = null;
 let speechRequestId = 0;
 const voiceListeners = new Set();
@@ -147,6 +148,14 @@ function clearSpeakingState() {
   });
 }
 
+function stopActiveAudio() {
+  if (!activeAudio) return;
+  activeAudio.pause();
+  activeAudio.removeAttribute('src');
+  activeAudio.load();
+  activeAudio = null;
+}
+
 function hasPersianScript(text) {
   return /[\u0600-\u06FF]/.test(text || '');
 }
@@ -162,10 +171,73 @@ function getPersianFrontSpeech(card) {
   };
 }
 
-async function speak(text, lang, buttonId) {
-  if (!('speechSynthesis' in window)) return;
-
+function normalizeSpeechText(text) {
   const speechText = (text || '').trim();
+  return speechText || null;
+}
+
+function buildRemoteTtsUrl(text, lang) {
+  const ttsLang = normalizeLangCode(lang).split('-')[0] || 'en';
+  if (ttsLang !== 'fa') return null;
+
+  const params = new URLSearchParams({ text });
+  return `/api/tts/persian?${params.toString()}`;
+}
+
+function speakWithAudioTts(text, lang, buttonId) {
+  const speechText = normalizeSpeechText(text);
+  if (!speechText) return;
+
+  const audioUrl = buildRemoteTtsUrl(speechText, lang);
+  if (!audioUrl) {
+    speak(speechText, lang, buttonId);
+    return;
+  }
+
+  const requestId = ++speechRequestId;
+  const btn = buttonId ? document.getElementById(buttonId) : null;
+
+  if (pendingSpeechTimer) {
+    window.clearTimeout(pendingSpeechTimer);
+    pendingSpeechTimer = null;
+  }
+
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+  }
+
+  stopActiveAudio();
+  clearSpeakingState();
+
+  const audio = new Audio(audioUrl);
+  activeAudio = audio;
+
+  const finish = () => {
+    if (requestId !== speechRequestId) return;
+    if (btn) btn.classList.remove('speaking');
+    if (activeAudio === audio) activeAudio = null;
+  };
+
+  const fallbackToWebSpeech = () => {
+    if (requestId !== speechRequestId) return;
+    finish();
+    speak(speechText, lang, buttonId);
+  };
+
+  if (btn) btn.classList.add('speaking');
+  audio.onended = finish;
+  audio.onerror = fallbackToWebSpeech;
+
+  audio.play().catch(fallbackToWebSpeech);
+}
+
+async function speak(text, lang, buttonId) {
+  if (!('speechSynthesis' in window)) {
+    showToast('Speech is not available in this browser.');
+    return;
+  }
+
+  const speechText = normalizeSpeechText(text);
   if (!speechText) return;
 
   const synth = window.speechSynthesis;
@@ -178,17 +250,16 @@ async function speak(text, lang, buttonId) {
   }
 
   clearSpeakingState();
+  stopActiveAudio();
   synth.cancel();
   synth.resume();
 
-  // Ensure voices are loaded before speaking
+  // Refresh voices when available, but do not block the click on voice loading.
   if (cachedVoices.length === 0) {
-    await loadVoices();
+    loadVoices();
   } else {
     refreshVoices();
   }
-
-  if (requestId !== speechRequestId) return;
 
   pendingSpeechTimer = window.setTimeout(() => {
     if (requestId !== speechRequestId) return;
@@ -205,6 +276,7 @@ async function speak(text, lang, buttonId) {
     }
 
     const finish = () => {
+      if (requestId !== speechRequestId) return;
       if (btn) btn.classList.remove('speaking');
       if (activeUtterance === utterance) activeUtterance = null;
     };
@@ -215,6 +287,7 @@ async function speak(text, lang, buttonId) {
       const speechError = event.error || '';
       if (!['canceled', 'cancelled', 'interrupted'].includes(speechError)) {
         console.warn('Speech failed:', speechError || event);
+        showToast('No voice is available for this card.');
       }
       finish();
     };
@@ -530,7 +603,7 @@ document.getElementById('btn-speak-front').addEventListener('click', (e) => {
   const p = PROFILES[currentProfile];
   if (currentProfile === 'persian') {
     const speech = getPersianFrontSpeech(card);
-    speak(speech.text, speech.lang, 'btn-speak-front');
+    speakWithAudioTts(speech.text, speech.lang, 'btn-speak-front');
   } else {
     speak(card.dutch, p.frontLang, 'btn-speak-front');
   }
