@@ -16,15 +16,81 @@ const pool = new Pool({
 
 const persianTtsCache = new Map();
 const PERSIAN_TTS_VOICE = 'fa-IR-DilaraNeural';
+const OPENAI_TTS_MODEL = process.env.OPENAI_TTS_MODEL || 'gpt-4o-mini-tts';
+const OPENAI_TTS_VOICE = process.env.OPENAI_TTS_VOICE || 'marin';
 const MAX_TTS_TEXT_LENGTH = 500;
 const MAX_TTS_CACHE_ITEMS = 200;
 
-function cachePersianTts(text, audioBuffer) {
+function getPersianTtsCacheKey(provider, text) {
+  return `${provider}:${text}`;
+}
+
+function cachePersianTts(provider, text, audioBuffer) {
   if (persianTtsCache.size >= MAX_TTS_CACHE_ITEMS) {
     const oldestKey = persianTtsCache.keys().next().value;
     persianTtsCache.delete(oldestKey);
   }
-  persianTtsCache.set(text, audioBuffer);
+  persianTtsCache.set(getPersianTtsCacheKey(provider, text), audioBuffer);
+}
+
+async function generateOpenAiPersianTts(text) {
+  if (!process.env.OPENAI_API_KEY) return null;
+
+  const response = await fetch('https://api.openai.com/v1/audio/speech', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: OPENAI_TTS_MODEL,
+      voice: OPENAI_TTS_VOICE,
+      input: text,
+      response_format: 'mp3',
+      instructions: 'Speak in natural Persian (Farsi), clearly and without adding extra words.',
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('OpenAI Persian TTS failed:', response.status, errorText);
+    throw new Error('OpenAI TTS service failed');
+  }
+
+  return Buffer.from(await response.arrayBuffer());
+}
+
+async function generateFreePersianTts(text) {
+  const ttsResult = await fetch('https://freetts.org/api/tts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      text,
+      voice: PERSIAN_TTS_VOICE,
+      rate: '-10%',
+      pitch: '+0Hz',
+    }),
+  });
+
+  if (!ttsResult.ok) {
+    const errorText = await ttsResult.text();
+    console.error('Persian TTS generation failed:', ttsResult.status, errorText);
+    throw new Error('FreeTTS service failed');
+  }
+
+  const { file_id } = await ttsResult.json();
+  if (!file_id) {
+    throw new Error('FreeTTS service returned no audio id');
+  }
+
+  const audioResult = await fetch(`https://freetts.org/api/audio/${encodeURIComponent(file_id)}`);
+  if (!audioResult.ok) {
+    const errorText = await audioResult.text();
+    console.error('Persian TTS audio download failed:', audioResult.status, errorText);
+    throw new Error('FreeTTS audio download failed');
+  }
+
+  return Buffer.from(await audioResult.arrayBuffer());
 }
 
 app.use(express.json());
@@ -54,44 +120,16 @@ app.get('/api/tts/persian', async (req, res) => {
       return res.status(400).json({ error: 'text is too long' });
     }
 
-    const cachedAudio = persianTtsCache.get(text);
+    const provider = process.env.OPENAI_API_KEY ? 'openai' : 'freetts';
+    const cachedAudio = persianTtsCache.get(getPersianTtsCacheKey(provider, text));
     if (cachedAudio) {
       res.set('Content-Type', 'audio/mpeg');
       res.set('Cache-Control', 'public, max-age=3600');
       return res.send(cachedAudio);
     }
 
-    const ttsResult = await fetch('https://freetts.org/api/tts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text,
-        voice: PERSIAN_TTS_VOICE,
-        rate: '-10%',
-        pitch: '+0Hz',
-      }),
-    });
-
-    if (!ttsResult.ok) {
-      const errorText = await ttsResult.text();
-      console.error('Persian TTS generation failed:', ttsResult.status, errorText);
-      return res.status(502).json({ error: 'TTS service failed' });
-    }
-
-    const { file_id } = await ttsResult.json();
-    if (!file_id) {
-      return res.status(502).json({ error: 'TTS service returned no audio id' });
-    }
-
-    const audioResult = await fetch(`https://freetts.org/api/audio/${encodeURIComponent(file_id)}`);
-    if (!audioResult.ok) {
-      const errorText = await audioResult.text();
-      console.error('Persian TTS audio download failed:', audioResult.status, errorText);
-      return res.status(502).json({ error: 'TTS audio download failed' });
-    }
-
-    const audioBuffer = Buffer.from(await audioResult.arrayBuffer());
-    cachePersianTts(text, audioBuffer);
+    const audioBuffer = await generateOpenAiPersianTts(text) || await generateFreePersianTts(text);
+    cachePersianTts(provider, text, audioBuffer);
 
     res.set('Content-Type', 'audio/mpeg');
     res.set('Cache-Control', 'public, max-age=3600');
