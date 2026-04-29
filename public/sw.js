@@ -1,4 +1,4 @@
-const CACHE_NAME = 'flashcards-v4';
+const CACHE_NAME = 'flashcards-v5';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -55,8 +55,16 @@ self.addEventListener('notificationclick', event => {
   );
 });
 
-// Fetch: network-first for everything (always get latest, fall back to cache)
+// Fetch: network-first for app assets, do not cache API/audio responses here.
 self.addEventListener('fetch', event => {
+  if (event.request.method !== 'GET') return;
+
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
   event.respondWith(
     fetch(event.request)
       .then(response => {
