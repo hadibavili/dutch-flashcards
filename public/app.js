@@ -39,72 +39,196 @@ let selectedCategory = null;
 
 // --- Speech ---
 let cachedVoices = [];
+let voicesPromise = null;
+let activeUtterance = null;
+let pendingSpeechTimer = null;
+let speechRequestId = 0;
+const voiceListeners = new Set();
 
-function loadVoices() {
+function refreshVoices() {
+  if (!('speechSynthesis' in window)) return [];
+  cachedVoices = window.speechSynthesis.getVoices();
+  return cachedVoices;
+}
+
+function notifyVoiceListeners() {
+  refreshVoices();
+  voiceListeners.forEach(listener => listener());
+}
+
+function addVoicesChangedListener(listener) {
+  const synth = window.speechSynthesis;
+  voiceListeners.add(listener);
+
+  if (typeof synth.addEventListener === 'function') {
+    synth.addEventListener('voiceschanged', listener);
+  } else {
+    synth.onvoiceschanged = notifyVoiceListeners;
+  }
+}
+
+function removeVoicesChangedListener(listener) {
+  const synth = window.speechSynthesis;
+  voiceListeners.delete(listener);
+
+  if (typeof synth.removeEventListener === 'function') {
+    synth.removeEventListener('voiceschanged', listener);
+  } else if (voiceListeners.size === 0) {
+    synth.onvoiceschanged = null;
+  }
+}
+
+function loadVoices(timeout = 350) {
   return new Promise((resolve) => {
-    cachedVoices = window.speechSynthesis.getVoices();
+    cachedVoices = refreshVoices();
     if (cachedVoices.length > 0) {
       resolve(cachedVoices);
-    } else {
-      window.speechSynthesis.onvoiceschanged = () => {
-        cachedVoices = window.speechSynthesis.getVoices();
-        resolve(cachedVoices);
-      };
+      return;
     }
+
+    if (voicesPromise) {
+      voicesPromise.then(resolve);
+      return;
+    }
+
+    voicesPromise = new Promise((voiceResolve) => {
+      let settled = false;
+      let timeoutId = null;
+
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        if (timeoutId) window.clearTimeout(timeoutId);
+        removeVoicesChangedListener(finish);
+        voicesPromise = null;
+        voiceResolve(refreshVoices());
+      };
+
+      addVoicesChangedListener(finish);
+      timeoutId = window.setTimeout(finish, timeout);
+    });
+
+    voicesPromise.then(resolve);
   });
 }
 
+function normalizeLangCode(lang) {
+  return (lang || '').toLowerCase().replace(/_/g, '-');
+}
+
 function findVoice(lang) {
-  const langPrefix = lang.split('-')[0]; // 'nl', 'en', 'fa'
+  const voices = cachedVoices.length > 0 ? cachedVoices : refreshVoices();
+  const targetLang = normalizeLangCode(lang);
+  const langPrefix = targetLang.split('-')[0]; // 'nl', 'en', 'fa'
 
   // Exact match first (e.g. nl-NL)
-  let voice = cachedVoices.find(v => v.lang === lang);
+  let voice = voices.find(v => normalizeLangCode(v.lang) === targetLang);
   if (voice) return voice;
 
   // Prefix match (e.g. nl)
-  voice = cachedVoices.find(v => v.lang.startsWith(langPrefix + '-'));
+  voice = voices.find(v => normalizeLangCode(v.lang).startsWith(langPrefix + '-'));
   if (voice) return voice;
 
   // Loose match (e.g. lang contains 'nl')
-  voice = cachedVoices.find(v => v.lang.toLowerCase().startsWith(langPrefix));
+  voice = voices.find(v => normalizeLangCode(v.lang).startsWith(langPrefix));
+  if (voice) return voice;
+
+  // Some browsers expose Persian voices by name with incomplete lang metadata.
+  if (langPrefix === 'fa') {
+    voice = voices.find(v => /persian|farsi|فارسی/i.test(v.name || ''));
+  }
+
   return voice || null;
 }
 
-async function speak(text, lang) {
+function clearSpeakingState() {
+  document.querySelectorAll('.btn-speak.speaking').forEach(btn => {
+    btn.classList.remove('speaking');
+  });
+}
+
+function hasPersianScript(text) {
+  return /[\u0600-\u06FF]/.test(text || '');
+}
+
+function getPersianFrontSpeech(card) {
+  const farsiScript = (card.farsi_script || '').trim();
+  if (farsiScript) return { text: farsiScript, lang: 'fa-IR' };
+
+  const frontText = (card.dutch || '').trim();
+  return {
+    text: frontText,
+    lang: hasPersianScript(frontText) ? 'fa-IR' : 'en-US',
+  };
+}
+
+async function speak(text, lang, buttonId) {
   if (!('speechSynthesis' in window)) return;
-  window.speechSynthesis.cancel();
+
+  const speechText = (text || '').trim();
+  if (!speechText) return;
+
+  const synth = window.speechSynthesis;
+  const requestId = ++speechRequestId;
+  const btn = buttonId ? document.getElementById(buttonId) : null;
+
+  if (pendingSpeechTimer) {
+    window.clearTimeout(pendingSpeechTimer);
+    pendingSpeechTimer = null;
+  }
+
+  clearSpeakingState();
+  synth.cancel();
+  synth.resume();
 
   // Ensure voices are loaded before speaking
   if (cachedVoices.length === 0) {
     await loadVoices();
+  } else {
+    refreshVoices();
   }
 
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = lang;
-  utterance.rate = 0.85;
+  if (requestId !== speechRequestId) return;
 
-  // Explicitly set voice
-  const voice = findVoice(lang);
-  if (voice) {
-    utterance.voice = voice;
-  }
+  pendingSpeechTimer = window.setTimeout(() => {
+    if (requestId !== speechRequestId) return;
+    pendingSpeechTimer = null;
 
-  // Animate button
-  const isFront = lang !== 'en-US';
-  const btn = isFront
-    ? document.getElementById('btn-speak-front')
-    : document.getElementById('btn-speak-back');
+    const utterance = new SpeechSynthesisUtterance(speechText);
+    utterance.lang = lang;
+    utterance.rate = 0.85;
 
-  if (btn) btn.classList.add('speaking');
-  utterance.onend = () => { if (btn) btn.classList.remove('speaking'); };
-  utterance.onerror = () => { if (btn) btn.classList.remove('speaking'); };
+    // Explicitly set voice when the browser exposes a matching one.
+    const voice = findVoice(lang);
+    if (voice) {
+      utterance.voice = voice;
+    }
 
-  window.speechSynthesis.speak(utterance);
+    const finish = () => {
+      if (btn) btn.classList.remove('speaking');
+      if (activeUtterance === utterance) activeUtterance = null;
+    };
+
+    if (btn) btn.classList.add('speaking');
+    utterance.onend = finish;
+    utterance.onerror = (event) => {
+      const speechError = event.error || '';
+      if (!['canceled', 'cancelled', 'interrupted'].includes(speechError)) {
+        console.warn('Speech failed:', speechError || event);
+      }
+      finish();
+    };
+
+    activeUtterance = utterance;
+    synth.speak(utterance);
+    synth.resume();
+  }, 60);
 }
 
 // Preload voices as early as possible
 if ('speechSynthesis' in window) {
-  loadVoices();
+  loadVoices(1000);
+  addVoicesChangedListener(refreshVoices);
 }
 
 // --- DOM Elements ---
@@ -151,6 +275,15 @@ function applyProfile() {
   document.getElementById('input-dutch').placeholder = p.addFrontPlaceholder;
   document.getElementById('label-example-front').textContent = p.addExampleFrontLabel;
   document.getElementById('input-example-nl').placeholder = p.addExampleFrontPlaceholder;
+
+  const farsiScriptField = document.getElementById('farsi-script-field');
+  const farsiScriptInput = document.getElementById('input-farsi-script');
+  if (currentProfile === 'persian') {
+    farsiScriptField.classList.remove('hidden');
+  } else {
+    farsiScriptField.classList.add('hidden');
+    farsiScriptInput.value = '';
+  }
 }
 
 // --- API Helpers ---
@@ -347,10 +480,13 @@ async function addCard(e) {
   const category_id = document.getElementById('input-category').value;
   const example_nl = document.getElementById('input-example-nl').value.trim();
   const example_en = document.getElementById('input-example-en').value.trim();
+  const farsi_script = currentProfile === 'persian'
+    ? document.getElementById('input-farsi-script').value.trim()
+    : '';
 
   await api('/cards', {
     method: 'POST',
-    body: JSON.stringify({ dutch, english, category_id, example_nl, example_en }),
+    body: JSON.stringify({ dutch, english, category_id, example_nl, example_en, farsi_script }),
   });
 
   document.getElementById('add-form').reset();
@@ -393,22 +529,17 @@ document.getElementById('btn-speak-front').addEventListener('click', (e) => {
 
   const p = PROFILES[currentProfile];
   if (currentProfile === 'persian') {
-    // Speak Farsi script with fa-IR lang; browser uses best available voice
-    // Fallback to Fenglish with en-US only if no script available
-    if (card.farsi_script) {
-      speak(card.farsi_script, 'fa-IR');
-    } else {
-      speak(card.dutch, 'en-US');
-    }
+    const speech = getPersianFrontSpeech(card);
+    speak(speech.text, speech.lang, 'btn-speak-front');
   } else {
-    speak(card.dutch, p.frontLang);
+    speak(card.dutch, p.frontLang, 'btn-speak-front');
   }
 });
 
 document.getElementById('btn-speak-back').addEventListener('click', (e) => {
   e.stopPropagation();
   const card = cards[currentIndex];
-  if (card) speak(card.english, 'en-US');
+  if (card) speak(card.english, 'en-US', 'btn-speak-back');
 });
 
 ratingButtons.querySelectorAll('.btn-rating').forEach(btn => {
